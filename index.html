@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="./libs/d3.js"></script>
+    <script src="libs/d3jstopojson.v1.js"></script>
+    <title>MA Map</title>
+    <style>
+        h1, h3 {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 10px;
+        }
+
+        .container h3 {
+            margin-bottom: 20px;
+        }
+
+        path {
+            stroke-width: 0.5px;
+            stroke: black;
+        }
+
+        path:hover {
+            opacity: 0.6;
+            stroke: black;
+            stroke-width: 4px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="tooltip"></div>
+    <div class="container">
+        <h1>Geospatial Visualization</h1>
+        <h3>Shishir Kumar Pathak - 02122205</h3>
+        <div class="fig1"></div>
+        <div class="fig2"></div>
+        <div class="fig3"></div>
+    </div>
+
+    <script>
+        const window_dims = {
+            width: window.innerWidth,
+            height: window.innerHeight
+        };
+
+        const svgWidth = window_dims.width / 2;
+        const svgHeight = window_dims.width / 3;
+
+        const MA_counties = "./data/towns.topojson";
+        const gini_index = "./data/gini_index.csv";
+
+        const countyData = [
+            { "county": "Barnstable County", "fips_code": 25001 },
+            { "county": "Hampshire County", "fips_code": 25015 },
+            { "county": "Middlesex County", "fips_code": 25017 },
+            { "county": "Nantucket County", "fips_code": 25019 },
+            { "county": "Norfolk County", "fips_code": 25021 },
+            { "county": "Plymouth County", "fips_code": 25023 },
+            { "county": "Suffolk County", "fips_code": 25025 },
+            { "county": "Worcester County", "fips_code": 25027 }
+        ];
+
+        Promise.all([
+            d3.json(MA_counties),
+            d3.csv(gini_index)
+        ]).then(data => {
+            const topology_data = data[0];
+            const csv_data = data[1];
+
+            const projections = [
+                d3.geoAzimuthalEqualArea(),
+                d3.geoAlbersUsa(),
+                d3.geoAlbers(),
+                d3.geoMercator(),
+                d3.geoNaturalEarth1()
+            ];
+
+            const geojson = topojson.feature(topology_data, topology_data.objects.ma);
+
+            function generateMap_A(topo_data, containerName, width, height, margin = 30) {
+                const svg = d3.select(containerName).append("svg")
+                    .attr("width", width)
+                    .attr("height", height);
+
+                const geoPath_generator = d3.geoPath()
+                    .projection(projections[3].fitSize([width - margin, height - margin], geojson));
+
+                const colorInterpolator = d3.interpolateRgbBasis(['#e0f3f8', '#91bfdb', '#4575b4'].reverse());
+                const logScale = d3.scaleLog()
+                    .domain(d3.extent(geojson.features, d => d.properties.POP2010));
+
+                svg.selectAll("path")
+                    .data(geojson.features)
+                    .enter()
+                    .append("path")
+                    .attr("d", d => geoPath_generator(d))
+                    .attr("fill", d => colorInterpolator(logScale(d.properties.POP2010)));
+            }
+            generateMap_A(topology_data, ".fig1", svgWidth, svgHeight);
+
+            function generateMap_B(topo_data, containerName, width, height, margin = 30) {
+                const svg = d3.select(containerName).append("svg")
+                    .attr("width", width)
+                    .attr("height", height);
+
+                const projection2 = projections[3]
+                    .fitSize([width - margin, height - margin], geojson);
+
+                const geoPath_generator2 = d3.geoPath()
+                    .projection(projection2);
+
+                const populationChangeScale = d3.scaleSequential()
+                    .domain([0, d3.max(geojson.features, d => Math.abs(d.properties.POPCH00_10))])
+                    .interpolator(d3.interpolateRdYlBu);
+
+                svg.selectAll("path")
+                    .data(geojson.features)
+                    .enter()
+                    .append("path")
+                    .attr("d", d => geoPath_generator2(d))
+                    .attr("fill", d => populationChangeScale(Math.abs(d.properties.POPCH00_10)));
+            }
+            generateMap_B(topology_data, ".fig2", svgWidth, svgHeight);
+
+            const countyColorScale = d3.scaleOrdinal()
+                .domain(countyData.map(d => d.fips_code))
+                .range(d3.schemeCategory10);
+
+            function generateCountyMap(topo_data, containerName, width, height, margin = 30) {
+                const svg = d3.select(containerName).append("svg")
+                    .attr("width", width)
+                    .attr("height", height);
+
+                const geoPath_generator = d3.geoPath()
+                    .projection(projections[3].fitSize([width - margin, height - margin], geojson));
+
+                svg.selectAll("path")
+                    .data(geojson.features)
+                    .enter()
+                    .append("path")
+                    .attr("d", d => geoPath_generator(d))
+                    .attr("fill", d => countyColorScale(d.properties.FIPS_STCO));
+            }
+            generateCountyMap(topology_data, ".fig3", svgWidth, svgHeight);
+        });
+    </script>
+</body>
+</html>
